@@ -1,0 +1,30 @@
+FROM golang:1.23-bullseye AS builder
+
+COPY ./rdsys /rdsys
+
+WORKDIR /rdsys
+
+RUN make build
+
+RUN make descriptors
+
+FROM debian:12-slim AS runtime
+
+RUN apt-get update; \
+    apt-get install -y \
+        sudo curl jq \
+        tor; \
+    apt-get autopurge -y; \
+    apt-get clean
+
+COPY ./config/rdsys /opt/rdsys
+COPY ./scripts/rdsys.sh /usr/local/bin/rdsys
+COPY --from=builder /rdsys/backend /usr/local/bin/rdsys-backend
+COPY --from=builder /rdsys/distributors /usr/local/bin/rdsys-distributors
+RUN chmod +x /usr/local/bin/rdsys; \
+    chmod +x /usr/local/bin/rdsys-backend; \
+    chmod +x /usr/local/bin/rdsys-distributors
+
+WORKDIR /tmp
+
+CMD ["sh", "-c", "/usr/local/bin/rdsys"]

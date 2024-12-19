@@ -1,0 +1,38 @@
+FROM golang:1.23-bullseye AS webtunnel
+
+COPY ./webtunnel /webtunnel
+
+ENV CGO_ENABLED=0
+
+WORKDIR /webtunnel
+
+RUN go build \
+        -ldflags="-s -w" \
+        -o "build/client" \
+            gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel/main/client
+
+FROM golang:1.23-bullseye AS builder
+
+COPY ./bridgestrap /bridgestrap
+
+WORKDIR /bridgestrap
+
+RUN go build
+
+FROM debian:12-slim AS runtime
+
+RUN apt-get update; \
+    apt-get install -y \
+        sudo curl jq \
+        tor torsocks; \
+    apt-get autopurge -y; \
+    apt-get clean
+
+COPY --from=webtunnel /webtunnel/build/client /usr/local/bin/webtunnel
+COPY --from=builder /bridgestrap/bridgestrap /usr/local/bin/bridgestrap
+RUN chmod +x /usr/local/bin/webtunnel; \
+    chmod +x /usr/local/bin/bridgestrap
+
+WORKDIR /tmp
+
+CMD ["sh", "-c", "/usr/local/bin/bridgestrap -webtunnel /usr/local/bin/webtunnel"]

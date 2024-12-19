@@ -1,0 +1,88 @@
+# docker-compose.yml
+
+services:
+  bridgestrap:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile-bridgestrap
+    tmpfs:
+      - /var/log
+      - /tmp
+    healthcheck:
+      test: "curl -sL http://127.0.0.1:5000 -o /dev/null"
+      interval: 5s
+      retries: 20
+    networks:
+      - tor
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+
+  rdsys:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile-rdsys
+    tmpfs:
+      - /var/log
+      - /tmp
+    volumes:
+      - moat:/rdsys/storage
+    depends_on:
+      bridgestrap:
+        condition: service_healthy
+    healthcheck:
+      test: "curl -sL http://127.0.0.1/moat -o /dev/null"
+      interval: 5s
+      retries: 20
+    networks:
+      - tor
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 1G
+
+  tor:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile-tor
+    tmpfs:
+      - /var/log
+      - /tmp
+    depends_on:
+      rdsys:
+        condition: service_healthy
+    healthcheck:
+      test: "curl -sL --socks5 127.0.0.1:9050 https://check.torproject.org/ -o /dev/null"
+      interval: 10s
+      retries: 30
+    networks:
+      - tor
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+volumes:
+  onbasca-db:
+    name: onbasca-db
+  moat:
+    name: moat
+
+networks:
+  tor:
+    name: tor
+    driver: bridge
+    enable_ipv6: true
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.51.0/24
+        - subnet: fd4d:6169:6b33:5f72::/64

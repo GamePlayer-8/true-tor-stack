@@ -1,0 +1,29 @@
+FROM golang:1.23-bullseye AS builder
+
+COPY ./webtunnel /webtunnel
+
+ENV CGO_ENABLED=0
+
+WORKDIR /webtunnel
+
+RUN go build \
+        -ldflags="-s -w" \
+        -o "build/client" \
+            gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel/main/client
+
+FROM debian:12-slim AS runtime
+
+RUN apt-get update; \
+    apt-get install -y \
+        sudo curl jq \
+        tor torsocks; \
+    apt-get autopurge -y; \
+    apt-get clean
+
+COPY ./scripts/rotate.sh /usr/local/bin/rotate
+COPY ./config/tor/torrc.conf /etc/tor/torrc.example.in
+COPY --from=builder /webtunnel/build/client /usr/local/bin/webtunnel
+RUN chmod +x /usr/local/bin/rotate; \
+    chmod +x /usr/local/bin/webtunnel
+
+CMD ["sh", "-c", "/usr/local/bin/rotate"]

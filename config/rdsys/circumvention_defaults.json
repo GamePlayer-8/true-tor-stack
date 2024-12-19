@@ -1,0 +1,6 @@
+{
+	"settings": [
+		{"bridges": {"type": "webtunnel", "source": "builtin"}},
+		{"bridges": {"type": "webtunnel", "source": "bridgedb"}}
+	]
+}
