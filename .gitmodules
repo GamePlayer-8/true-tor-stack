@@ -1,0 +1,12 @@
+[submodule "webtunnel"]
+	path = webtunnel
+	url = https://git.chimmie.k.vu/Tor/webtunnel
+[submodule "onbasca"]
+	path = onbasca
+	url = https://git.chimmie.k.vuTor/onbasca
+[submodule "bridgestrap"]
+	path = bridgestrap
+	url = https://git.chimmie.k.vu/Tor/bridgestrap
+[submodule "rdsys"]
+	path = rdsys
+	url = https://git.chimmie.k.vu/Tor/rdsys
