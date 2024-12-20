@@ -10,6 +10,3 @@
 [submodule "rdsys"]
 	path = rdsys
 	url = https://git.chimmie.k.vu/Tor/rdsys
-[submodule "torbridge-cli"]
-	path = torbridge-cli
-	url = https://git.chimmie.k.vu/GamePlayer-8/torbridge-cli
