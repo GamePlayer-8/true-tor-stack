@@ -1,4 +1,4 @@
-FROM golang:1.23-bullseye AS builder
+FROM golang:1.23-bookworm AS builder
 
 COPY ./webtunnel /webtunnel
 
@@ -11,19 +11,30 @@ RUN go build \
         -o "build/client" \
             gitlab.torproject.org/tpo/anti-censorship/pluggable-transports/webtunnel/main/client
 
+FROM rust:1.83.0-bookworm AS torbridge-cli
+
+COPY ./torbridge-cli /torbridge-cli
+
+WORKDIR /torbridge-cli
+
+RUN cargo build --release
+
 FROM debian:12-slim AS runtime
 
 RUN apt-get update; \
     apt-get install -y \
         sudo curl jq \
-        tor torsocks; \
+        tor torsocks \
+        procps sed; \
     apt-get autopurge -y; \
     apt-get clean
 
 COPY ./scripts/rotate.sh /usr/local/bin/rotate
 COPY ./config/tor/torrc.conf /etc/tor/torrc.example.in
 COPY --from=builder /webtunnel/build/client /usr/local/bin/webtunnel
+COPY --from=torbridge-cli /torbridge-cli/target/release/torbridge-cli /usr/local/bin/torbridge-cli
 RUN chmod +x /usr/local/bin/rotate; \
-    chmod +x /usr/local/bin/webtunnel
+    chmod +x /usr/local/bin/webtunnel; \
+    chmod +x /usr/local/bin/torbridge-cli
 
 CMD ["sh", "-c", "/usr/local/bin/rotate"]

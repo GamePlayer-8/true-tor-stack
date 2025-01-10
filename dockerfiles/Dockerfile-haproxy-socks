@@ -1,0 +1,6 @@
+FROM haproxy:lts-alpine3.21 AS runtime
+
+USER root
+RUN apk add --no-cache netcat-openbsd
+
+COPY config/haproxy/haproxy-socks.cfg /usr/local/etc/haproxy/haproxy.cfg
