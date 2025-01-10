@@ -3,7 +3,7 @@
 	url = https://git.chimmie.k.vu/Tor/webtunnel
 [submodule "onbasca"]
 	path = onbasca
-	url = https://git.chimmie.k.vuTor/onbasca
+	url = https://git.chimmie.k.vu/Tor/onbasca
 [submodule "bridgestrap"]
 	path = bridgestrap
 	url = https://git.chimmie.k.vu/Tor/bridgestrap
