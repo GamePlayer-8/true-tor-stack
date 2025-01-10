@@ -3,6 +3,8 @@
 services:
   bridgestrap:
     restart: unless-stopped
+    profiles:
+      - ENABLE_SERVER
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-bridgestrap
@@ -16,6 +18,7 @@ services:
     networks:
       - tor
     deploy:
+      replicas: 4
       resources:
         limits:
           cpus: '2'
@@ -23,6 +26,8 @@ services:
 
   rdsys:
     restart: unless-stopped
+    profiles:
+      - ENABLE_SERVER
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-rdsys
@@ -30,16 +35,17 @@ services:
       - /var/log
       - /tmp
     volumes:
-      - moat:/rdsys/storage
+      - moat:/opt/rdsys/storage
     depends_on:
       bridgestrap:
         condition: service_healthy
     healthcheck:
-      test: "curl -sL http://127.0.0.1/moat -o /dev/null"
+      test: "curl -sL http://127.0.0.1:8000/moat -o /dev/null"
       interval: 5s
       retries: 20
     networks:
-      - tor
+      tor:
+        ipv4_address: 172.16.51.50
     deploy:
       resources:
         limits:
@@ -48,15 +54,16 @@ services:
 
   tor:
     restart: unless-stopped
+    init: ${ENABLE_SPREAD:-true}
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-tor
     tmpfs:
       - /var/log
       - /tmp
-    depends_on:
-      rdsys:
-        condition: service_healthy
+#    depends_on:
+#      rdsys:
+#        condition: service_healthy
     healthcheck:
       test: "curl -sL --socks5 127.0.0.1:9050 https://check.torproject.org/ -o /dev/null"
       interval: 10s
@@ -70,9 +77,63 @@ services:
           cpus: '1'
           memory: 512M
 
+  load_balancer_socks:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile-haproxy-socks
+    ports:
+      - "9050:9050/tcp"
+    depends_on:
+      tor:
+        condition: service_healthy
+    healthcheck:
+      test: "nc -z 127.0.0.1 9050"
+      interval: 5s
+      retries: 20
+    networks:
+      - tor
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  load_balancer_trans:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile-haproxy-trans
+    ports:
+      - "9040:9040/tcp"
+    depends_on:
+      tor:
+        condition: service_healthy
+    healthcheck:
+      test: "nc -z 127.0.0.1 9040"
+      interval: 5s
+      retries: 20
+    networks:
+      - tor
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+#  udp_tunnel_socks:
+#    build:
+#      context: .
+#      dockerfile: dockerfiles/Dockerfile-udp2raw
+#    command: >
+#      -s -l0.0.0.0:9050 -r load_balancer_socks:9050
+#    ports:
+#      - "9050:9050/udp"
+#    depends_on:
+#      load_balancer_socks:
+#        condition: service_healthy
+#    networks:
+#      - tor
+
 volumes:
-  onbasca-db:
-    name: onbasca-db
   moat:
     name: moat
 
