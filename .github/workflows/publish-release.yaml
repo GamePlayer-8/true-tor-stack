@@ -1,0 +1,238 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+      tag:
+        type: string
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      prerelease:
+          description: "Prerelease"
+          required: false
+          default: false
+          type: boolean
+
+env:
+  DEBIAN_FRONTEND: 'noninteractive'
+  TZ: Etc/UTC
+  IMAGE_NAME: nan/nan
+  IMAGES: 'nan'
+  tag: ${{ github.event.inputs.tag || github.ref_name || 'v1.0' }}
+  prev_tag: ${{ github.event.inputs.tag || github.ref_name || 'v1.0' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 32768
+          swap-size-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+      
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 6
+
+      - name: Install git
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git git-lfs
+          sudo apt-get autopurge -y
+          sudo apt-get clean
+
+      - name: Checkout branch
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          ref: ${{ inputs.target }}
+          fetch-depth: '0'
+          fetch-tags: 'true'
+          lfs: 'true'
+          submodules: 'true'
+          set-safe-directory: 'true'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set tag from input or trigger
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "tag=$(echo "${{ github.ref }}" | sed 's/refs\/tags\///')" >> $GITHUB_ENV
+          fi
+
+      - name: lowercase github.repository
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
+
+      - name: list images
+        run: |
+          echo "IMAGES=$(sh scripts/list-images.sh)" >> ${GITHUB_ENV}
+
+      - name: Build Docker image
+        run: |
+          sh scripts/build-images.sh ghcr.io/${{ env.IMAGE_NAME }}:${{ env.tag }} ${{ env.IMAGES }}
+          sh scripts/build-images.sh ghcr.io/${{ env.IMAGE_NAME }}:latest ${{ env.IMAGES }}
+      
+      - name: Push Docker image to GHCR
+        run: |
+          sh scripts/publish-images.sh ghcr.io/${{ env.IMAGE_NAME }}:${{ env.tag }} ${{ env.IMAGES }}
+          sh scripts/publish-images.sh ghcr.io/${{ env.IMAGE_NAME }}:latest ${{ env.IMAGES }}
+
+  build-fallback:
+    runs-on: self-hosted
+    timeout-minutes: 345600
+    needs: [build]
+    if: failure()
+
+    steps:
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 6
+
+      - name: Install git
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git git-lfs
+          sudo apt-get autopurge -y
+          sudo apt-get clean
+
+      - name: Checkout branch
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          ref: ${{ inputs.target }}
+          fetch-depth: '0'
+          fetch-tags: 'true'
+          lfs: 'true'
+          submodules: 'true'
+          set-safe-directory: 'true'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set tag from input or trigger
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "tag=$(echo "${{ github.ref }}" | sed 's/refs\/tags\///')" >> $GITHUB_ENV
+          fi
+
+      - name: lowercase github.repository
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY@L}" >> ${GITHUB_ENV}
+
+      - name: list images
+        run: |
+          echo "IMAGES=$(sh scripts/list-images.sh)" >> ${GITHUB_ENV}
+
+      - name: Build Docker image
+        run: |
+          sh scripts/build-images.sh ghcr.io/${{ env.IMAGE_NAME }}:${{ env.tag }} ${{ env.IMAGES }}
+          sh scripts/build-images.sh ghcr.io/${{ env.IMAGE_NAME }}:latest ${{ env.IMAGES }}
+      
+      - name: Push Docker image to GHCR
+        run: |
+          sh scripts/publish-images.sh ghcr.io/${{ env.IMAGE_NAME }}:${{ env.tag }} ${{ env.IMAGES }}
+          sh scripts/publish-images.sh ghcr.io/${{ env.IMAGE_NAME }}:latest ${{ env.IMAGES }}
+
+  publish:
+    runs-on: ubuntu-24.04
+    needs: [build, build-fallback]
+    if: |
+      always() && 
+      (needs.build.result == 'success' && needs.build-fallback.result == 'skipped') ||
+      (needs.build.result == 'failure' && needs.build-fallback.result == 'success')
+    steps:
+      - name: Install git
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git git-lfs
+          sudo apt-get autopurge -y
+          sudo apt-get clean
+
+      - name: Checkout branch
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          ref: ${{ inputs.target }}
+          fetch-depth: '0'
+          fetch-tags: 'true'
+          lfs: 'true'
+          submodules: 'true'
+          set-safe-directory: 'true'
+
+      - name: Set tag from input or trigger
+        id: set_tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "tag=$(echo "${{ github.ref }}" | sed 's/refs\/tags\///')" >> $GITHUB_ENV
+          fi
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          # Find the previous tag, excluding the current tag
+          prev_tag=$(git describe --abbrev=0 --tags --exclude="${{ env.tag }}")
+          echo "prev_tag=${prev_tag}" >> $GITHUB_ENV
+
+      - name: Publish release
+        uses: notpeelz/action-gh-create-release@v5.0.1
+        with:
+          target: ${{ inputs.target }}
+          tag: ${{ env.tag }}
+          prerelease: ${{ inputs.prerelease }}
+          draft: false
+          strategy: replace
+          title: Release ${{ env.tag }}
+          body: |
+              ## Changelog
+
+              Changes since the last release: [${{ env.prev_tag }}...${{ env.tag }}](https://github.com/${{ github.repository }}/compare/${{ env.prev_tag }}...${{ env.tag }})
+
+              ---
+              
+              Build made in GitHub Actions.
