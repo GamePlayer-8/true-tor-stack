@@ -8,6 +8,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-bridgestrap
+    #image: ghcr.io/gameplayer-8/bridgestrap
     tmpfs:
       - /var/log
       - /tmp
@@ -31,6 +32,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-rdsys
+    #image: ghcr.io/gameplayer-8/rdsys
     tmpfs:
       - /var/log
       - /tmp
@@ -58,6 +60,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-tor
+    #image: ghcr.io/gameplayer-8/tor
     tmpfs:
       - /var/log
       - /tmp
@@ -81,6 +84,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-haproxy-socks
+    #image: ghcr.io/gameplayer-8/haproxy-socks
     ports:
       - "9050:9050/tcp"
     depends_on:
@@ -102,6 +106,7 @@ services:
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-haproxy-trans
+    #image: ghcr.io/gameplayer-8/haproxy-trans
     ports:
       - "9040:9040/tcp"
     depends_on:
@@ -123,6 +128,7 @@ services:
 #    build:
 #      context: .
 #      dockerfile: dockerfiles/Dockerfile-udp2raw
+#    #image: ghcr.io/gameplayer-8/udp2raw
 #    command: >
 #      -s -l0.0.0.0:9050 -r load_balancer_socks:9050
 #    ports:
