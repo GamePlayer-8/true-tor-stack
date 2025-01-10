@@ -79,7 +79,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          sh -x scripts/build-images.sh ghcr.io/${{ env.IMAGE_NAME }}:nightly ${{ env.IMAGES }}
+          sh scripts/build-images.sh ghcr.io/${{ env.IMAGE_NAME }}:nightly ${{ env.IMAGES }}
       
       - name: Push Docker image to GHCR
         run: |
