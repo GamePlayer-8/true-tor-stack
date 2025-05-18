@@ -56,7 +56,8 @@ services:
 
   tor:
     restart: unless-stopped
-    init: ${ENABLE_SPREAD:-true}
+    # DISABLE LINE IF DEALING WiTH OLDER DOCKER-COMPOSE (DEBIAN 12)
+    #init: ${ENABLE_SPREAD:-true}
     build:
       context: .
       dockerfile: dockerfiles/Dockerfile-tor
